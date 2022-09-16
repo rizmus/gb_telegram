@@ -2,7 +2,7 @@ import telebot
 import os.path
 import requests
 
-API_TOKEN = '5783465400:AAF6AcEbdTMLRweW05bkwCLip8DU3EQ_ohw'
+API_TOKEN = ''
 TEL_BASE_PATH = './tel_base/'
 MENU_TEXT = 'Выберите пункт меню:\n1. Показать все контакты\n2. Добавить контакт\n3. Импортировать из файла\n4. Экспортировать в файл\n5. Поиск по контактам'
 bot = telebot.TeleBot(API_TOKEN)
