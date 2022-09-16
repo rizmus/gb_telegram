@@ -1,21 +1,20 @@
 import telebot
-bot = telebot.TeleBot('5783465400:AAF6AcEbdTMLRweW05bkwCLip8DU3EQ_ohw')
+bot = telebot.TeleBot('')
 
 
 @bot.message_handler(commands=['start'])
 def take_start(msg: telebot.types.Message):
     global users_operations
     users_operations.setdefault(msg.from_user.id, ['', ''])
-    bot.send_message(chat_id=msg.from_user.id, text=f'{msg.from_user.full_name}! Приложение Калькулятор приветствует \
-     тебя!')
-    bot.send_message(chat_id=msg.from_user.id, text=f'Выберите, с какими числами будем работать?\n1. Целые числа\n \
+    bot.send_message(chat_id=msg.from_user.id, text=f'Привет!')
+    bot.send_message(chat_id=msg.from_user.id, text=f'Выбери какие числа будем считать??\n1. Целые числа\n \
     2. Дробные числа')
     bot.register_next_step_handler(msg, take_type_number)
 
 
 @bot.message_handler(commands=['help'])
 def take_help(msg: telebot.types.Message):
-    bot.send_message(chat_id=msg.from_user.id, text=f'Приложение Калькулятор позволяет получить результат \
+    bot.send_message(chat_id=msg.from_user.id, text=f'Приложение позволяет получить результат \
     арифметических действий\n<+ - * />\nмежду двух чисел')
     bot.send_message(chat_id=msg.from_user.id, text=f'Для начала введите команду /start')
 
