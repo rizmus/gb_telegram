@@ -1,123 +1,125 @@
-from distutils.cmd import Command
-from fileinput import filename
-from imaplib import Commands
-from os import path
+import telebot
+from datetime import datetime
 
-'''
-код от Сергея
+
+API_TOKEN = ''
+LOG_PATH = 'log/'
+users_operations = {}
+
+
+bot = telebot.TeleBot(API_TOKEN)
+
+
 @bot.message_handler(commands=['start'])
 def take_start(msg: telebot.types.Message):
-    bot.send_message(chat_id=msg.from_user.id, text=f'Здравствуйте, {msg.from_user.full_name}, {msg.from_user.id}')
+    global users_operations
+    users_operations.setdefault(msg.from_user.id, ['', '', '', ''])
+    bot.send_message(chat_id=msg.from_user.id, text='Calculator Bot')
+    bot.send_message(chat_id=msg.from_user.id, text=f'C какими числами будем работать?\n1. Действительные '
+                                                    f'числа\n2. Комплексные числа')
+    bot.register_next_step_handler(msg, take_type_number)
 
 
 @bot.message_handler(commands=['help'])
 def take_help(msg: telebot.types.Message):
-    bot.send_message(chat_id=msg.from_user.id, text=f'Справка: qweqwd \nqwqw  \nqwrq \nwr \nqwr \nr')
+    bot.send_message(chat_id=msg.from_user.id, text=f'Бот позволяет получить результат '
+                                                    f'арифметических действий\n<+ - * />\nмежду двух чисел')
+    bot.send_message(chat_id=msg.from_user.id, text=f'Для начала введите команду /start')
 
 
-def take_second_message1(msg: telebot.types.Message):
-    bot.send_message(chat_id=msg.from_user.id, text=f'Ранее вы прислали только буквы.\nВаше второе сообщение {msg.text}')
+def take_type_number(msg: telebot.types.Message):
+    if msg.text in {'1', '2'}:
+        global users_operations
+        users_operations[msg.from_user.id][0] = int(msg.text)
+        bot.send_message(chat_id=msg.from_user.id, text=f'Выберите, арифметическое действие <+ - * />')
+        bot.register_next_step_handler(msg, take_type_of_operations)
+    else:
+        bot.send_message(chat_id=msg.from_user.id, text=f'Ошибка, введите 1 или 2')
+        bot.register_next_step_handler(msg, take_type_number)
 
 
-def take_second_message2(msg: telebot.types.Message):
-    bot.send_message(chat_id=msg.from_user.id, text=f'Ранее вы прислали только цифры.\nВаше второе сообщение {msg.text}')
+def take_type_of_operations(msg: telebot.types.Message):
+    if msg.text in {'+': 1, '-': 2, '*': 3, '/': 4}:
+        global users_operations
+        users_operations[msg.from_user.id][1] = {'+': 1, '-': 2, '*': 3, '/': 4}[msg.text]
+        if users_operations[msg.from_user.id][0] == 1:
+            bot.send_message(chat_id=msg.from_user.id, text=f'Введите первое действительное число')
+        else:
+            bot.send_message(chat_id=msg.from_user.id, text=f'Введите первое комплексное число в виде <действительная '
+                                                            f'часть> <мнимая часть>')
+        bot.register_next_step_handler(msg, take_first_number)
+    else:
+        bot.send_message(chat_id=msg.from_user.id, text=f'Ошибка, введите арифметическое действие <+ - * />')
+        bot.register_next_step_handler(msg, take_type_of_operations)
+
+
+def take_first_number(msg: telebot.types.Message):
+    tmp = []
+    if users_operations[msg.from_user.id][0] == 1:
+        tmp.append(msg.text)
+        tmp.append('0')
+    else:
+        tmp = msg.text.split()
+    if check(tmp[0]) is not None and check(tmp[1]) is not None:
+        users_operations[msg.from_user.id][2] = complex(check(tmp[0]), check(tmp[1]))
+        if users_operations[msg.from_user.id][0] == 1:
+            bot.send_message(chat_id=msg.from_user.id, text=f'Введите второе действительное число')
+        else:
+            bot.send_message(chat_id=msg.from_user.id, text=f'Введите второе комплексное число в виде <действительная '
+                                                            f'часть> <мнимая часть>')
+        bot.register_next_step_handler(msg, take_second_number)
+    else:
+        bot.send_message(chat_id=msg.from_user.id, text=f'Неверный формат числа')
+        if users_operations[msg.from_user.id][0] == 1:
+            bot.send_message(chat_id=msg.from_user.id, text=f'Введите первое действительное число')
+        else:
+            bot.send_message(chat_id=msg.from_user.id, text=f'Введите первое комплексное число в виде <действительная '
+                                                            f'часть> <мнимая часть>')
+        bot.register_next_step_handler(msg, take_first_number)
+
+
+def take_second_number(msg: telebot.types.Message):
+    tmp = []
+    if users_operations[msg.from_user.id][0] == 1:
+        tmp.append(msg.text)
+        tmp.append('0')
+    else:
+        tmp = msg.text.split()
+    if check(tmp[0]) is not None and check(tmp[1]) is not None:
+        users_operations[msg.from_user.id][3] = complex(check(tmp[0]), check(tmp[1]))
+        itog = calcul(users_operations[msg.from_user.id][2], users_operations[msg.from_user.id][3], users_operations[msg.from_user.id][1])
+        if itog is not None:
+            if itog.imag == 0:
+                if itog.real.is_integer():
+                    itog = int(itog.real)
+                else:
+                    itog = itog.real
+        else:
+            itog = 'Деление на 0'
+        bot.send_message(chat_id=msg.from_user.id, text=f'Результат вычисления: {itog}')
+        with open(LOG_PATH+'log'+str(datetime.date(datetime.today()))+'.csv', mode='a+', encoding='utf-8') as log:
+            log.write(f'{msg.from_user.id},{",".join([str(x) for x in users_operations[msg.from_user.id]])},{itog}\n')
+        bot.send_message(chat_id=msg.from_user.id, text=f'Для продолжения отправьте любое сообщение')
+    else:
+        bot.send_message(chat_id=msg.from_user.id, text=f'Неверный формат числа')
+        if users_operations[msg.from_user.id][0] == 1:
+            bot.send_message(chat_id=msg.from_user.id, text=f'Введите второе действительное число')
+        else:
+            bot.send_message(chat_id=msg.from_user.id, text=f'Введите второе комплексное число в виде <действительная '
+                                                            f'часть> <мнимая часть>')
+        bot.register_next_step_handler(msg, take_second_number)
 
 
 @bot.message_handler()
 def take_message(msg: telebot.types.Message):
-    bot.send_message(chat_id=msg.from_user.id, text=f'Вы прислали сообщение {msg.text}')
-    if msg.text.isalpha():
-        bot.register_next_step_handler(msg, take_second_message1)
-    elif msg.text.isdigit():
-        bot.register_next_step_handler(msg, take_second_message2)
-
-
-bot.polling()'''
-
-# filename = 'seminary\\konstatin.txt'
-
-# if path.exists(filename):
-#     with open(filename) as f:
-#         print(f.read())
-# else:
-#     print('Файла нет')
-
-# filename = 'seminary\\konstatin.txt'
-
-# if path.isfile(filename):
-#     with open(filename) as f:
-#         print(f.read())
-# else:
-#     print('Файла нет')
-
-
-# @bot.message_handler(commands = ['start'])
-# def take_start(msg: telebot.types.Message):
-#     bot.send_message(chat_id=msg.from_user.id, text=f'Здравствуйте, {msg.from_user.full_name}')
-
-
-# def take_second_message1(msg: telebot.types.Message):
-#     bot.send_message(chat_id=msg.from_user.id, text=f'ранее вы прислали буквы {msg.text}')
-
-# def take_second_message2(msg: telebot.types.Message):
-#     bot.send_message(chat_id=msg.from_user.id, text=f'ранее вы прислали цыфрв {msg.text}')
-
-
-# @bot.message_handler()
-# def take_message(msg: telebot.types.Message):
-#     bot.send_message(chat_id=msg.from_user.id, text=f'Вы прислали сообщение {msg.text}')
-#     if msg.text.isalpha():
-#         bot.register_next_step_handler(msg, take_second_message1)
-#     elif msg.text.isdigit():
-#         bot.register_next_step_handler(msg, take_second_message2)
-
-import telebot
-
-bot = telebot.TeleBot('5332535441:AAHmyrfr4G0zsUsZpA5YuK77rl838dlIxGA')
-
-'''
-def calcul(number_1, number_2, operation):
-    if operation == 1:
-        result = str(number_1 + number_2)
-    elif operation == 2:
-        result = str(number_1 - number_2)
-    elif operation == 3:
-        result = str(number_1 * number_2)
-    elif operation == 4:
-        result = str(number_1 / number_2)
-    else:
-        result = None
-        print('Действие не поддерживается, вызывайте помощь')
-
-    return result
-
-
-def calc(number_type):
-    if number_type == 1:  # работа с целыми числами
-        strnum = 'целое число'
-        strnum1 = 'первое'
-        strnum2 = 'второе'
-    elif number_type == 2:  # работа с дробными числами
-        strnum = 'дробь'
-        strnum1 = 'первую'
-        strnum2 = 'вторую'
-
-    num1 = None
-    while num1 is None:
-        num1 = input(f'Введите {strnum1} {strnum} : ')
-        num1 = check(num1)
-
-    num2 = None
-    while num2 is None:
-        num2 = input(f'Введите {strnum2} {strnum} : ')
-        num2 = check(num2)
-
-    return num1, num2
+    bot.send_message(chat_id=msg.from_user.id, text=f'Выберите, с какими числами будем работать?\n1. Действительные '
+                                                    f'числа\n2. Комплексные числа')
+    bot.register_next_step_handler(msg, take_type_number)
 
 
 def check(vhod):
     new_chislo = []
-    vhod = vhod.replace(',','.').replace(' ','')
+    vhod = vhod.replace(',', '.').replace(' ', '')  # заменяем на точки и убиарем пробелы
     koef = ''
     tochka = 0
     tire = 0
@@ -146,118 +148,23 @@ def check(vhod):
         return None
 
 
-def menu():
-    print("Дорогой пользователь! Приложение Калькулятор приветсвует тебя!")
-    print("1. Рациональные числа")
-    print("2. Комплексные числа\n")
-    p1 = p2 = None
-    ok = False
-    while not ok:
-        p1 = input("Выберите, с какими числами будем работать? Введите 1 или 2:")
-        if p1.isdigit() and 1 <= int(p1) <= 2:
-            ok = True
-            p1 = int(p1)
-        else:
-            print("Ошибка, введите 1 или 2")
-
-    print("Выберите арифметическое действие")
-    print("1. Сложение")
-    print("2. Вычитание")
-    print("3. Умножение")
-    print("4. Деление")
-
-    ok = False
-    while not ok:
-        p2 = input("Выберите арифметическое действие. Введите число от 1 до 4:")
-        if p2.isdigit() and 1 <= int(p2) <= 4:
-            p2 = int(p2)
-            ok = True
-        else:
-            print("Ошибка, введите число от 1 до 4")
-
-    number_1, number_2 = calc(p1)
-    result = calcul(number_1, number_2, p2)
-    print(result)
-
-
-menu()
-'''
-
-
-@bot.message_handler(commands=['start'])
-def take_start(msg: telebot.types.Message):
-    bot.send_message(chat_id=msg.from_user.id,
-                     text=f'{msg.from_user.full_name}! Приложение Калькулятор приветсвует тебя!')
-    bot.send_message(chat_id=msg.from_user.id,
-                     text=f'Выберите, с какими числами будем работать?\n1. Целые числа\n2. Дробные числа')
-    bot.register_next_step_handler(msg, take_type_number)
-
-
-'''
-словарь
-'''
-
-type_of_numbers = ''
-type_of_operations = ''
-
-
-def take_type_number(msg: telebot.types.Message):
-    if msg.text in {'1', '2'}:
-        global type_of_numbers
-        type_of_numbers = int(msg.text)
-        bot.send_message(chat_id=msg.from_user.id, text=f'Выберите, арифметическое действие <+ - * />')
-        bot.register_next_step_handler(msg, take_type_of_operations)
-    else:
-        bot.send_message(chat_id=msg.from_user.id, text=f'Ошибка, введите 1 или 2')
-        bot.register_next_step_handler(msg, take_type_number)
-
-
-def take_type_of_operations(msg: telebot.types.Message):
-    if msg.text in {'+': 1, '-': 2, '*': 3, '/': 4}:
-        global type_of_operations
-        type_of_operations = {'+': 1, '-': 2, '*': 3, '/': 4}[msg.text]
-        bot.send_message(chat_id=msg.from_user.id, text=f'Ввеите два числа через пробел <Первое> <Второе>')
-        bot.register_next_step_handler(msg, take_numbers)
-    else:
-        bot.send_message(chat_id=msg.from_user.id, text=f'Ошибка, введите арифметическое действие <+ - * />')
-        bot.register_next_step_handler(msg, take_type_of_operations)
-
-
-def take_numbers(msg: telebot.types.Message):
-    tmp = msg.text.split()
-    if len(tmp) == 2 and tmp[0].isdigit() and tmp[1].isdigit():
-        itog = calcul(int(tmp[0]), int(tmp[1]), type_of_operations)
-        bot.send_message(chat_id=msg.from_user.id, text=f'Результат {itog}')
-        bot.send_message(chat_id=msg.from_user.id, text=f'Для продолжения отправьте любое сообщение')
-    else:
-        bot.send_message(chat_id=msg.from_user.id, text=f'Ввеите два числа через пробел <Первое> <Второе>')
-        bot.register_next_step_handler(msg, take_numbers)
-
-
 def calcul(number_1, number_2, operation):
     if operation == 1:
-        result = str(number_1 + number_2)
+        result = number_1 + number_2
     elif operation == 2:
-        result = str(number_1 - number_2)
+        result = number_1 - number_2
     elif operation == 3:
-        result = str(number_1 * number_2)
-    elif operation == 4:
-        result = str(number_1 / number_2)
+        result = number_1 * number_2
+    elif operation == 4 and number_2 != 0:
+        try:
+            result = number_1 / number_2
+        except ZeroDivisionError:
+            result = None
     else:
         result = None
-        print('Действие не поддерживается, вызывайте помощь')
-
     return result
-
-
-@bot.message_handler()
-def take_message(msg: telebot.types.Message):
-    bot.send_message(chat_id=msg.from_user.id,
-                     text=f'Выберите, с какими числами будем работать?\n1. Рациональные числа\n2. Комплексные числа')
-    bot.register_next_step_handler(msg, take_type_number)
 
 
 print('Бот запущен')
 
 bot.polling()
-
